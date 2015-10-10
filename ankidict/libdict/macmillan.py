@@ -52,7 +52,7 @@ class SubSense(PageModel):
         Node.list("> div.EXAMPLES")(
             examples=Example()
         ),
-        Node("> div.THES"),
+        Node.optional("> div.THES"),
     )
 
 
@@ -81,7 +81,7 @@ class Sense(PageModel):
         Node.list("> div.EXAMPLES")(
             examples=Example()
         ),
-        # Node("> div.THES"),
+        Node.optional("> div.THES"),
         Node.optional("> ol.SUB-SENSES")(
             Node.list("div.SUB-SENSE-CONTENT")(
                 subsenses=SubSense()
@@ -95,20 +95,22 @@ class RelatedWordLink(PageModel):
 
     page_tree = Html(
         Node("a")(
-            # FIXME FIXME
-            Node.optional("> :not(.arl8)")(
-                Node.list("span").concat(" ")(
-                    #key=Text()
-                ),
-                Node("span.PART-OF-SPEECH")(
-                    part_of_speech=Text()
-                ),
+            Node.optional("span.PART-OF-SPEECH")(
+                part_of_speech=Text()
             ),
             key=Attr("title"),
             url=Attr("href"),
             link_type=Constant("related words"),
         )
     )
+
+    @classmethod
+    def postproc(cls, dic):
+        k = dic["key"]
+        p = dic.get("part_of_speech", "")
+        k = k[:-len(p)]
+        k = k.strip()
+        dic["key"] = k
 
 
 class PhraseLink(PageModel):
@@ -186,8 +188,6 @@ class Entry(PageModel):
         dic['links'] += dic.pop('phrvbs', []) + dic.pop('phrs', [])
         return dic
     
-    # TODO TODO
-    # in postproc, convert all Nones to empty strings (in every model)
     # TODO TODO: HANDLING OF 'NOT FOUND' PAGES
 
 
