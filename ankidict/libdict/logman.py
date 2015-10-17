@@ -13,25 +13,47 @@ __all__ = ["models", "LogmanCache"]
 
 models = Models("logman")
 
-class Entry(PageModel):
-    model_class = dict      # FIXME
+
+class Sense(PageModel):
+    model_class = models.Sense
 
     page_tree = Html(
+        Node("> div.Sense")(
+            # TODO
+        )
     )
 
+class Entry(PageModel):
+    model_class = models.Entry
+
+    page_tree = Html(
+        # parse entry
+        Node("> div.Head")(
+        ),
+        Node.list("> div.Sense")(
+            senses = Sense()
+        ),
+        Node.optional("> div.Tail")(
+        )
+    )
 
 class DictionaryPage(PageModel):
     model_class = dict
 
     page_tree = Html(
-        Node.list("div.content1")(
-            entries = Entry()
+        Node("div.content1")(
+            Node("> div.Entry")(
+                entries = Entry(),
+                Node.list("> div.PhrVbEntry")(
+                    phrvbs = Entry()
+                )
+            )
         )
     )
 
     @classmethod
     def postproc(cls, dic):
-        # TODO: Get phrasal verbs entries from Entry and move to dic['entries']
+        dic['entries'].extend(dic.pop('phrvbs', []))
         return dic
 
 class SearchPage(PageModel):
