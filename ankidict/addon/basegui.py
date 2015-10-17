@@ -5,12 +5,20 @@ from aqt.qt import *
 import aqt.qt as QtGui
 from PyQt4 import QtCore
 from PyQt4 import QtWebKit
+from PyQt4.QtCore import Qt
+from PyQt4.QtGui import QApplication, QCursor
 from addon import macm_parser_css
 from addon import collection
 from libdict import macmillan
 import re
 import datetime
 from addon.collection import get_plugin
+
+
+class StyleSheet(object):
+    """Needed for html elements embedded into labels."""
+    related_link_key = "font-weight: bold; color: rgb(10, 50, 10);"
+    related_link_part_of_speech = "font-weight: normal; color: grey;"
 
 
 def tostr(a):
@@ -21,8 +29,7 @@ def tostr(a):
 
 
 class DictWindow(QWidget):
-    def __init__(self):
-        super(DictWindow, self).__init__()
+    def init_begin(self):
         def conf_btn(btn):
             btn.setMaximumWidth(60)
             btn.setStyleSheet("font-weight: bold; font-family: monospace")
@@ -42,7 +49,7 @@ class DictWindow(QWidget):
         #conf_btn(self.wordlist_button)
         #conf_btn(self.settings_button)
 
-    def init_finalize(self):
+    def init_end(self):
         self.head_hbox = QHBoxLayout()
         self.head_hbox.addWidget(self.prev_button)
         self.head_hbox.addWidget(self.next_button)
@@ -68,14 +75,26 @@ class DictWindow(QWidget):
             self.search_input.setText("")
 
 
-class DictEntryView(QWidget):
-    def __init__(self):
-        super(DictEntryView, self).__init__()
+class ScrollWidget(QWidget):
+    pass
 
+
+class LinkLabel(QLabel):
+    clicked = pyqtSignal()
+    def __init__(self, *args, **kwargs):
+        super(LinkLabel, self).__init__(*args, **kwargs)
+        self.setCursor(Qt.PointingHandCursor)
+
+    def mouseReleaseEvent(self, e):
+        self.clicked.emit()
+
+
+class DictEntryView(QWidget):
+    def init_begin(self):
         self.left_scroll = QScrollArea()
         self.right_scroll = QScrollArea()
-        self.left_widget = QWidget()
-        self.right_widget = QWidget()
+        self.left_widget = ScrollWidget()
+        self.right_widget = ScrollWidget()
         self.left_vbox = QVBoxLayout()
         self.right_vbox = QVBoxLayout()
         self.main_hbox = QHBoxLayout()
@@ -86,8 +105,13 @@ class DictEntryView(QWidget):
     def add_link(self, link, callback):
         title = tostr(link.key)
         href = link.url
-        btn = QLabel('<a href="related" style="text-decoration: none; color: black;"><strong>' + title + "</strong></a>")
-        btn.linkActivated.connect(callback)
+        label_content = "<span style='"+StyleSheet.related_link_key+"'>" + tostr(link.key) + "</span> "
+        label_content += "<span style='"+StyleSheet.related_link_part_of_speech+"'>"
+        label_content += tostr(link.part_of_speech)
+        # label_content += " " + tostr(link.url)
+        label_content += "</span>"
+        btn = LinkLabel(label_content)
+        btn.clicked.connect(callback)
         btn.show()
         btn.setWordWrap(True)
         def make_line():
@@ -101,7 +125,7 @@ class DictEntryView(QWidget):
         self.right_vbox.addWidget(btn)
         self.right_vbox.addWidget(make_line())
 
-    def init_finalize(self):
+    def init_end(self):
         self.left_scroll.setWidgetResizable(True)
         self.right_scroll.setWidgetResizable(True)
         self.left_widget.setLayout(self.left_vbox)
@@ -111,14 +135,18 @@ class DictEntryView(QWidget):
         self.left_scroll.setWidget(self.left_widget)
         self.right_scroll.setWidget(self.right_widget)
         self.right_scroll.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
-        # TODO: potem i tak to będą jakieś labelsy, więc się będą zawijać i będzie dobrze
         self.right_scroll.setMaximumWidth(get_plugin().config.related_defs_panel_width)
-        self.left_column = QVBoxLayout()
-        self.left_column.addWidget(self.left_scroll)
-        self.left_column.addWidget(self.examples_widget)
-        self.main_hbox.addLayout(self.left_column)
+        self.main_hbox.addWidget(self.left_scroll)
         self.main_hbox.addWidget(self.right_scroll)
         self.setLayout(self.main_hbox)
+
+
+class ExampleAddButton(QPushButton):
+    pass
+
+
+class ExampleWidget(QWidget):
+    pass
 
 
 class SenseWidget(QWidget):
@@ -129,11 +157,7 @@ class SenseWidget(QWidget):
         return wyn + self.sense.definition
 
     def extract_keys(self):
-        if self.sense.original_key is None:
-            keys = []
-        else:
-            keys = [s.strip() for s in self.sense.original_key.split("|")]
-        return keys
+        return self.sense.get_keys()
 
     def format_key_html(self):
         keys = self.extract_keys()
@@ -149,8 +173,7 @@ class SenseWidget(QWidget):
             tmp_def = " ____ ".join(tmp_def.split(i))
         return wyn + tmp_def
 
-    def __init__(self):
-        super(SenseWidget, self).__init__()
+    def init_begin(self):
         self.main_vbox = QVBoxLayout()
         self.def_hbox = QHBoxLayout()
         
@@ -166,37 +189,47 @@ class SenseWidget(QWidget):
         tmplabel.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         
         self.main_vbox.addWidget(tmplabel)
-        self.add_btn = QPushButton("ADD")
-        self.add_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        # self.add_btn = QPushButton("ADD")
+        # self.add_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         
         self.examples_to_hide = []
         #self.main_vbox.addLayout(self.def_hbox)
 
     def add_example(self, example, callback):
-        key = example.original_key
+        key = example.format_original_key_html()
         ex = example.content
-        tmp = '<a href="example" style="'+get_plugin().config.example_style+'"><i>'
+        tmp = '<span style="'+get_plugin().config.example_style+'"><i>'
         if key:
-            tmp += "<b> "+key+" </b>"
+            tmp += "</i><b> "+key+" </b><i>"
         tmp += ex
-        tmp += "</i></a>"
+        tmp += "</i></span>"
         tmplabel = QLabel(tmp)
         tmplabel.setWordWrap(True)
         tmplabel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
         tmplabel.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-        tmplabel.linkActivated.connect(callback)
-        self.examples_to_hide.append(tmplabel)
+        tmpwidget = ExampleWidget()
+        tmplayout = QHBoxLayout()
+        tmplayout.setContentsMargins(0, 0, 0, 0)
+        tmpbutton = ExampleAddButton("+")
+        tmplayout.addWidget(tmpbutton)
+        tmplayout.addWidget(tmplabel)
+        tmpwidget.setLayout(tmplayout)
+        tmpbutton.show()
+        tmplabel.show()
+        tmpbutton.clicked.connect(callback)
+        tmpbutton.clicked.connect(lambda: tmpbutton.setEnabled(False))
+        self.examples_to_hide.append(tmpwidget)
 
-    def init_finalize(self):
+    def init_end(self):
         self.examples_all = self.examples_to_hide
         self.examples_to_hide = self.examples_to_hide[(get_plugin().config.max_examples_per_sense):]
         def make_frame():
             fr = QFrame()
-            fr.setStyleSheet("background-color: white;");
+            #fr.setStyleSheet("background-color: white;");
             fr.setFrameShape(QFrame.Box)
-            fr.setFrameShadow(QFrame.Raised)
-            fr.setLineWidth(2)
-            fr.setMidLineWidth(2)
+            # fr.setFrameShadow(QFrame.Raised)
+            fr.setLineWidth(0)
+            fr.setMidLineWidth(0)
             return fr
         def make_hidden_examples():
             w = QWidget()
@@ -241,10 +274,56 @@ class SenseWidget(QWidget):
         frame = make_frame()
         frame.setLayout(self.main_vbox)
         self.def_hbox.addWidget(frame)
-        self.def_hbox.addWidget(self.add_btn)
+        # self.def_hbox.addWidget(self.add_btn)
         
         
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
         
         self.setLayout(self.def_hbox)
-        
+
+    def leaveEvent(self, event):
+        self.hidden_examples.onLeaveEvent(event)
+
+
+class WordListView(QWidget):
+    def init_begin(self):
+        self.main_hbox = QHBoxLayout()
+        self.text_edit = QTextEdit()
+        self.text_edit.setHtml('<table border="2" style="border-color: black; border-width: 2; border-style: solid;"> </table>')
+        self.main_hbox.addWidget(self.text_edit)
+        self.setLayout(self.main_hbox)
+        def func_constr(f):
+            def wyn(e):
+                f(e)
+                if e.key() == QtCore.Qt.Key_Backspace:
+                    self.reload_table()
+            return wyn
+        self.text_edit.keyPressEvent = func_constr(self.text_edit.keyPressEvent)
+        if get_plugin().config.log_wordlist:
+            today = datetime.date.today()
+            filename = "millandict_wordlist_log_"+str(today.month) + "_" +str(today.year) + ".html"
+            self.logfile = filename
+
+    def init_end(self):
+        pass
+
+    def add_table_row(self, a, b):
+        tr = "<tr><td>" + a + "</td><td>" + b + "</td></tr>"
+        text = self.text_edit.toHtml()[:-(len("</table></body></html>"))] + tr + "</table></body></html>"
+        text = 'border="2"'.join(text.split('border="0"'))
+        self.text_edit.setHtml(text)
+        if get_plugin().config.log_wordlist:
+            with open(self.logfile, "a+") as f:
+                f.write(tr.encode("ascii","ignore") + "\n")
+        #print self.text_edit.toHtml()
+
+    def reload_table(self):
+        text = self.text_edit.toHtml()
+        text = 'border="2"'.join(text.split('border="0"'))
+        #text = ''.join(text.split('<td></td>'))
+        text = ''.join(re.split(r'<tr>\s*<td>\s*</td>\s*<td>\s*</td>\s*</tr>',text))
+        #print text
+        cursor = self.text_edit.textCursor()
+        c_pos = self.text_edit.cursorRect().center()
+        self.text_edit.setHtml(text)
+        self.text_edit.setTextCursor(self.text_edit.cursorForPosition(c_pos))
