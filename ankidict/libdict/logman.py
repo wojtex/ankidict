@@ -13,17 +13,106 @@ __all__ = ["models", "LogmanCache"]
 
 models = Models("logman")
 
+class Example(PageModel):
+    model_class = models.Example
+
+    page_tree = Html(
+        Node("> img")(),
+        content = Text()
+    )
+
+class ColloExampleList(PageModel):
+    model_class = dict
+
+    page_tree = Html(
+        # TODO
+    )
+
+class GramExampleList(PageModel):
+    model_class = dict
+
+    page_tree = Html(
+        # TODO
+    )
+
+class Subsense(PageModel):
+    model_class = models.Subsense
+
+    page_tree = Html(
+        Node("> ftdef > span.DEF")(
+            Node("span")(),
+            definition = Text()
+        )
+        # TODO: They can be mixed.
+        #Node.list("> ftexa > div.EXAMPLE")(
+        #    examples = Example()
+        #)
+        #Node.list("> div.ColloExa")(
+        #    collo_examples = ColloExampleList()
+        #)
+        #Node.list("> div.GramExa")(
+        #    gram_examples = GramExampleList()
+        #)
+    )
 
 class Sense(PageModel):
     model_class = models.Sense
 
     page_tree = Html(
         Node("> div.Sense")(
-            # TODO
+            Node.optional("> h2 > span.SIGNPOST > span")(
+                shortened_def = Text()
+            ),
+            Node.optional("> span.REGISTERLAB")(
+                Node("> span")(),
+                style_level = Text()
+            ),
+            Node.optional("> span.GRAM")(
+                Node("> span")(),
+                syntax_coding = Text(),
+                Node("> span")()
+            ),
+            Node("> ftdef > span.DEF")(
+                definition = Text()
+            ),
+            Node("> span.SYN")(
+                # TODO
+            ),
+            Node("> span.OPP")(
+                # TODO
+            ),
+            Node("> span.RELATEDWD")(
+                # TODO
+            )
+            # TODO: examples like in subsense
+            # ...
+            Node.list("> div.Subsense")(
+                subsenses = Subsense()
+            )
         )
     )
 
 class Entry(PageModel):
+    model_class = models.Entry
+
+    page_tree = Html(
+        # parse entry
+        Node("> div.Head > div.unfolded > table.headword")(
+            Node("span.headwordSelected span.HWD")(
+                original_key=Text()
+            ),
+            Node("span.wordclassSelected span.POS")(
+                part_of_speech=Text()
+            )
+        ),
+        Node.list("> div.Sense")(
+            senses = Sense()
+        ),
+        Node.optional("> div.Tail")(
+        )
+    )
+
+class PhrasalVerbEntry(PageModel):
     model_class = models.Entry
 
     page_tree = Html(
@@ -37,6 +126,7 @@ class Entry(PageModel):
         )
     )
 
+
 class DictionaryPage(PageModel):
     model_class = dict
 
@@ -45,7 +135,7 @@ class DictionaryPage(PageModel):
             Node("> div.Entry")(
                 entries = Entry(),
                 Node.list("> div.PhrVbEntry")(
-                    phrvbs = Entry()
+                    phrvbs = PhrasalVerbEntry()
                 )
             )
         )
